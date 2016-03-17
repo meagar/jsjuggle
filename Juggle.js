@@ -1,3 +1,5 @@
+"use strict";
+
 /*
 * Javascript Juggling 0.1 Copyright (c) 2006 Boris von Loesch
 *
@@ -28,6 +30,50 @@ function Ball (animator, ball) {
 	this.animate = animateMe;
 	this.animator = animator;
 }
+
+function Siteswap(pattern) {
+	this.numBalls = null
+	this.maxThrow = 0
+	this.throws = []
+
+	pattern = pattern.split('')
+
+	if (pattern.length == 0)
+		throw "Invalid pattern"
+
+	var buffer;
+	var m = 0;
+
+	this.throws = pattern.map((char) => {
+		if (char.match(/^[0-9]$/))
+			return parseInt(char, 10);
+
+		if (char.toLowerCase().match(/^[a-z]$/i))
+			return char.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0) + 10;
+
+		throw "nope";
+	});
+
+	var buf = new Array(this.throws.length);
+
+	this.throws.forEach((t, index) => {
+		m += t;
+		if (t > this.maxThrow)
+			this.maxThrow = t;
+		var landing = (t + index) % this.throws.length;
+		if (buf[landing] == true)
+			throw "Invalid pattern"
+		else
+			buf[landing] = true;
+	})
+
+	this.numBalls = m / this.throws.length;
+}
+
+Siteswap.prototype.getHeight = function (position) {
+	return this.throws[position % this.throws.length];
+}
+
 
 function animateMe() {
 	var animator = this.animator;
@@ -88,36 +134,33 @@ function SiteswapAnimator(viewport) {
 	this.T = 4;
 
 	this.ssw = "0";
-	this.number = 0;
 	this.timer = null;
 	this.balls = null;
 	this.step = 0;
 	this.sswStep = 0;
-	this.maxThrow = 0;
-	this.style = new Array(100,0,50,0);
+	this.style = [100, 0, 50, 0];
 
 	//Functions
 	this.setSiteswap = setSiteswap;
-	this.checkSiteswap = checkSiteswap;
 	this.destroyBalls = destroyBalls;
 	this.createBalls = createBalls;
-	this.getHeight = getHeight;
 	this.getNextBall = getNextBall;
 	this.animate = animate;
 	this.startAnimation = startAnimation;
 	this.stopAnimation = stopAnimation;
 }
-	SiteswapAnimator.instances = new Array()
+
+SiteswapAnimator.instances = []
 
 
 /**
  * Creates and starts the siteswap animation
  */
-function setSiteswap (ssw, resolution, style) {
-	if (setSiteswap.arguments.length >= 3) {
+function setSiteswap(ssw, resolution, style) {
+	if (arguments.length >= 3) {
 		this.style = eval(style);
 	}
-	if (setSiteswap.arguments.length >= 2) {
+	if (arguments.length >= 2) {
 		if (isNaN(parseInt(resolution)) || parseInt(resolution)<5) {
 			alert ("Please enter a valid steps number (>4)");
 			return;
@@ -127,44 +170,21 @@ function setSiteswap (ssw, resolution, style) {
 			this.dwellSteps = Math.round(this.dwell * resolution);
 		}
 	}
-	this.ssw = ssw;
+	this.ssw = new Siteswap(ssw)
 	this.stopAnimation();
 	this.destroyBalls();
-	if (this.checkSiteswap() == false) alert (this.ssw+" is no valid siteswap!");
-	else {
+	if (this.ssw === false) {
+		alert ("Invalid siteswap!");
+	} else {
 		//Control throw height
 		this.T = 4;
 		var h = Math.sqrt((this.contHeight - this.yCoord - this.ballSize)/
-			((this.maxThrow - 1.0)*(this.maxThrow - 1.0)));
+			((this.ssw.maxThrow - 1.0)*(this.ssw.maxThrow - 1.0)));
 		if (h < this.T) this.T = h;
 		this.createBalls();
 		this.step = 0;
 		this.sswStep = 0;
 	}
-}
-
-/**
- * Check siteswap and calculate number of balls
- * and the maximal height
- */
-function checkSiteswap() {
-	if (this.ssw.length == 0) return false;
-	var buf = new Array();
-	var buffer;
-	this.maxThrow = 0;
-	var m = 0;
-	for (var i = 0; i < this.ssw.length; i++)
-		buf[i] = false;
-	for (var i = 0; i < this.ssw.length; i++) {
-		var s = parseInt(this.ssw.charAt(i));
-		m += s;
-		if (s > this.maxThrow) this.maxThrow = s;
-		buffer = (s + i) % this.ssw.length;
-		if (buf[buffer] == true) return false;
-		else buf[buffer] = true;
-	}
-	this.number = m / this.ssw.length;
-	return true;
 }
 
 
@@ -178,8 +198,8 @@ function destroyBalls() {
 }
 
 function createBalls () {
-	this.balls = new Array(this.number);
-	for (var i = 0; i < this.number; i++) {
+	this.balls = new Array(this.ssw.numBalls);
+	for (var i = 0; i < this.ssw.numBalls; i++) {
 		var img = document.createElement("img");
 		img.className = "ball";
 		img.src = this.ballPicture;
@@ -192,12 +212,8 @@ function createBalls () {
 }
 
 
-function getHeight(position) {
-	return parseInt(this.ssw.charAt(position % this.ssw.length));
-}
-
 function getNextBall() {
-	for (var i = 0; i < this.number; i++) {
+	for (var i = 0; i < this.ssw.numBalls; i++) {
 		if (this.balls[i].step == this.balls[i].ssw * this.resolution) return i;
 	}
 	return -1;
@@ -205,7 +221,7 @@ function getNextBall() {
 
 function animate() {
 	if (this.step % this.resolution == 0) {
-		var height = this.getHeight(this.sswStep);
+		var height = this.ssw.getHeight(this.sswStep);
 		if (height != 0) {
 			var i = this.getNextBall();
 			if (i == -1){
@@ -220,7 +236,7 @@ function animate() {
 		}
 		this.sswStep++;
 	}
-	for (var i = 0; i < this.number; i++) {
+	for (var i = 0; i < this.ssw.numBalls; i++) {
 		this.balls[i].animate();
 	}
 	this.step++;
@@ -251,8 +267,8 @@ function interpolateBezier(step, cStep, startx, starty, endx, endy, oben) {
 	var c1 = tuTriple * u;
 	var c2 = tuTriple * t;
 	var c3 = t * t * t;
-	x = (startx + endx) / 2.0;
-	y = (starty + endy) / 2.0 + oben;
+	var x = (startx + endx) / 2.0;
+	var y = (starty + endy) / 2.0 + oben;
 	x = c0 * startx + c1 * x + c2 * x + c3 * endx;
 	y = c0 * starty + c1 * y + c2 * y + c3 * endy;
 	var pos = new Array(2);
@@ -268,8 +284,8 @@ function getThrowCoord (step, cStep, T, startx, starty, endx, endy, height) {
 	if (height == 3) t = (3.5 - 1.0) * T;
 	var h = (9.81 * t * t) / 10.0;
 	var st = 1.0*step / cStep;
-	x = startx + st * (endx - startx);
-	y = starty + (st * (endy - starty)) - 4.0 * h * (st * st - st);
+	var x = startx + st * (endx - startx);
+	var y = starty + (st * (endy - starty)) - 4.0 * h * (st * st - st);
 	var pos = new Array(2);
 	pos[0] = x;
 	pos[1] = y;
